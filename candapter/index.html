@@ -1,0 +1,223 @@
+<html lang="en">
+   <head>
+
+   </head>
+   <body>
+      <button onclick="emitOpenCandapter()">open candapter</button>
+      <button onclick="emitCloseCandapter()">close candapter</button>
+
+      <style>
+#TCAN tr td {width: 50px}
+#TCAN tr td input{width: 100%}
+      </style>
+      <table id="TCAN" style="width:100%">
+         <tr>
+         <th>ID</th>
+         <th>DLC</th>
+         <th>B0</th>
+         <th>B1</th>
+         <th>B2</th>
+         <th>B3</th>
+         <th>B4</th>
+         <th>B5</th>
+         <th>B6</th>
+         <th>B7</th>
+         </tr>
+         <tr>
+            <td>
+               <input type="text" id="TCAN_ID" placeholder="CAN ID"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_DLC" placeholder="DLC"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B0" ></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B1" ></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B2"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B3"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B4"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B5"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B6"></input>
+            </td>
+            <td>
+               <input type="text" id="TCAN_B7"></input>
+            </td>
+         </tr>
+      </table>
+
+      <button onclick="onSubmitForm()">send</button>
+      <button onclick="addChart()">addchart</button>
+      <style>
+#RCAN tr td {width: 50px}
+#RCAN tr td input{width: 100%}
+      </style>
+      <table>
+         <tr>
+            <td>
+               <input type="text" id="RCAN_ID"></input>
+            </td>
+         </tr>
+      </table>
+      <style>
+#chartDrag { width: 100%; height: 100%; padding: 0; list-style-type: none }
+#chartDrag li {height:300px  }
+      </style>
+      <div id="future"></div>
+      <ul id="chartDrag">
+      </ul>
+      <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+      <script src="/jquery/dist/jquery.js"></script>
+      <script src="/jquery-ui-dist/jquery-ui.js"></script>
+      <script src="/socket.io-client/dist/socket.io.js"></script>
+      <script src="/canvasjs.min.js"></script>
+      <script>
+$( function() {
+   $( "#chartDrag" ).sortable();
+   $( "#chartDrag" ).disableSelection();
+
+} );
+      </script>
+      <script>
+var onSubmitForm = function() {
+   console.log('submitted')
+   var bytes = [$("#TCAN_B0").val(),
+      $("#TCAN_B1").val(),
+      $("#TCAN_B2").val(),
+      $("#TCAN_B3").val(),
+      $("#TCAN_B4").val(),
+      $("#TCAN_B5").val(),
+      $("#TCAN_B6").val(),
+      $("#TCAN_B7").val(), 'teststringinarray'];
+   var canid = parseInt($("#TCAN_ID").val(), 16);
+   var dlc = parseInt($("#TCAN_DLC").val());
+   socket.emit('clienttoserver', parseInt($("#TCAN_ID").val(), 16),
+          dlc, bytes.slice(0, dlc));
+   charts.map(function (x) {
+      x.idListener();
+      return 0;
+   });
+}
+
+var emitOpenCandapter = function() {
+   socket.emit("openCandapter");
+}
+var emitCloseCandapter = function() {
+   socket.emit("closeCandapter");
+}
+
+const ID_PEDALBOX2 = 0x501
+
+var socket = io.connect('http://192.168.42.1:4200');
+socket.on('candata', function (data, time) {
+   console.log(data);
+   console.log(time);
+   //throttle1 = parseInt(data.substring(4,8), 16);
+   //throttle2 = parseInt(data.substring(8,12), 16);
+
+   //updateChart(throttle1, throttle2);
+   charts.map(function (x) {
+      x.idListener(data, time);
+      return 0;
+   });
+});
+//https://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format
+if (!String.prototype.format) {
+   String.prototype.format = function() {
+      var args = arguments;
+      return this.replace(/{(\d+)}/g, function(match, number) {
+         return typeof args[number] != 'undefined'
+            ? args[number]
+            : match
+            ;
+      });
+   };
+}
+
+var charts = []
+var chartWidth = 10000;
+//var timeInit = getTime();
+
+class CANChart {
+   constructor(canid, chartName, dataProcessor) {
+      this.chartName = 'chart' + parseInt(chartName);
+      this.canid = canid;
+      this.data = [];
+      this.add();
+      this.dataProcessor = dataProcessor;
+   }
+
+   idListener(canMessage, time) {
+      if (canMessage.startsWith('t' + this.canid.toString(16)))
+      {
+         this.data.push(this.dataProcessor(canMessage, time));
+         console.log('{0}'.format(time - this.data[0].x));
+         while (this.data.length > 0 && time - this.data[0].x > chartWidth) {
+            this.data.shift()
+         }
+         this.chart.render();
+      }
+
+   }
+
+   add() {
+
+      charts.push(this);
+
+      $('#chartDrag').append('<li style="height:200px"><div id="{0}" style="height:100%; width:100%;"></div>      <button onclick="rmChart({0})">rmchart</button></li>'.format(this.chartName));
+   this.chart = new CanvasJS.Chart(this.chartName, {
+      height: 200,
+      dataPointWidth: chartWidth,
+      title: {
+         text: this.chartName
+
+      },
+      axisY: {
+         includeZero: false
+      },
+      data: [{
+         type: "line",
+         dataPoints: this.data
+      }]
+
+
+   });
+   this.chart.render();
+   }
+}
+
+var rmChart = function (fromhtml) {
+  console.log(fromhtml);
+
+};
+
+var chartid = 0;
+var addChart = function(byteNumList, littleEndian) {
+   console.log($('#RCAN_ID').val());
+   var newChart = new CANChart(parseInt($('#RCAN_ID').val(),16), chartid++, function (canMessage, time){
+      var x = time;
+      // var byteList = [];
+      // byteList.canMessage.substring(5,5+2), 16);
+      var y = 0;
+
+      y = parseInt(canMessage.substring(5,5+4), 16);
+
+      return {x: x,
+              y: y}
+   });
+};
+
+      </script>
+   </body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+    <head>
+
+    </head>
+    <body>
+        <p1 id ="candata" >data goes here</p1>
+        <div id="future"></div>
+         <script src="/jquery/dist/jquery.js"></script>
+        <script src = "/socket.io-client/dist/socket.io.js"></script>
+        <script type="text/javascript" src="canvasjs.min.js"></script>
+
+    </body>
+<script>
+  //chart
+  window.onload = function () {
+    var dps = [];   //dataPoints.
+    var chart = new CanvasJS.Chart("chartContainer",{
+      title :{
+        text: "Live Data"
+      },
+      axisX: {
+        title: "Axis X Title"
+      },
+      axisY: {
+        title: "Units"
+      },
+      data: [{
+        type: "line",
+        dataPoints : dps
+      }]
+    });
+    chart.render();
+    var xVal = dps.length + 1;
+    var yVal = 15;
+    var updateInterval = 1;
+    var updateChart = function () {
+      yVal = 0;
+      dps.push({x: xVal,y: yVal});
+      xVal++;
+      if (dps.length >  1000 ) {
+        dps.shift();
+      }
+      chart.render();
+      // update chart after specified time.
+    };
+    setInterval(function(){updateChart()}, updateInterval);
+  }
+
+  //IDs
+  const PEDALBOX2 = '501';
+
+  //socket
+  var socket = io.connect('http://192.168.42.1:5000');
+  socket.on('connect', function(data) {
+    socket.emit('join', 'Hello World from client');
+  });
+
+  socket.on('gotcandata', (data) => {
+    var s = ab2str(data);
+    var n = s[3];
+
+    if(s.substr(0, 2) == PEDALBOX2)
+    {
+    //   updateChart();
+      document.getElementById("candata").innerHTML = s;
+
+    }
+    //file write
+    //fs.appendFile(s.substr(0,2) + ".txt", parswInt(s.substr(4, n*2)) + "\n");
+  });
+
+  //functions go here
+
+  function bin2String(array) {
+    var result = "";
+    for (var i = 0; i < array.length; i++) {
+      result += String.fromCharCode(parseInt(array[i], 8));
+    }
+    return result;
+  }
+
+  function ab2str(buf) {
+    return String.fromCharCode.apply(null, new Uint8Array(buf));
+  }
+
+</script>
+<body>
+	<div id="chartContainer" style="height: 300px; width: 100%;">
+	</div>
+</body>
+</html>
